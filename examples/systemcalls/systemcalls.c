@@ -1,5 +1,10 @@
 #include "systemcalls.h"
-
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <sys/types.h>
 /**
  * @param cmd the command to execute with system()
  * @return true if the command in @param cmd was executed
@@ -16,8 +21,8 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-
-    return true;
+    int sys = system(cmd);
+    return sys == 0;
 }
 
 /**
@@ -58,10 +63,31 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
-
+	pid_t pid = fork();
+	int status;
+    	if (pid == -1) {
+        	perror("fork");
+        	return false;
+    	} else if (pid == 0) {
+        	// Child process
+        	execv(command[0], command);
+        	perror("execv");
+        	exit(EXIT_FAILURE);
+    	} else {
+        	// Parent process
+        
+        	if (waitpid(pid, &status, 0) == -1) {
+            	perror("waitpid");
+            	return false;
+        }
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            return true;
+        } else {
+            return false;
+        }
+    }
     va_end(args);
-
-    return true;
+    return status == 0;
 }
 
 /**
@@ -90,10 +116,41 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
  *   redirect standard out to a file specified by outputfile.
  *   The rest of the behaviour is same as do_exec()
- *
-*/
+ */
+    int fd = open(outputfile, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+    if (fd == -1) {
+	    perror("open");
+	     return false;
+    }
+    pid_t pid = fork();
+    if (pid == -1) {
+	     perror("fork");
+	     return false;
+    } else if (pid == 0) {
+	        // Child process
+	      if (dup2(fd, STDOUT_FILENO) == -1) {
+	            perror("dup2");
+	            exit(EXIT_FAILURE);
+	      }
+	      close(fd);
+	      execv(command[0], command);
+	      perror("execv");
+	      exit(EXIT_FAILURE);
+    } else {
+	        // Parent process
+	      int status;
+	      if (waitpid(pid, &status, 0) == -1) {
+	            perror("waitpid");
+	            return false;
+	      }
+	      if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+	            return true;
+	      } else {
+	            return false;
+	      }
+    }
 
     va_end(args);
-
-    return true;
+    close(fd);
+    return false;
 }

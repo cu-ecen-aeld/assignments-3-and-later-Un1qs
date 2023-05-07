@@ -52,8 +52,6 @@ fi
 #make clean
 #make
 
-#build writer program
-make
 
 for i in $( seq 1 $NUMFILES)
 do
